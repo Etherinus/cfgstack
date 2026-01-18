@@ -1,0 +1,26 @@
+# local layer
+config/local.*
+
+# merged outputs
+merged.*
+
+# temp
+*.tmp
+
+# build artifacts
+bin/
+dist/
+
+# Go
+*.test
+*.out
+cover.out
+coverage.out
+
+# editors
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
