@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/etherinus/cfg-fuse/internal/errx"
-	"github.com/etherinus/cfg-fuse/internal/prov"
+	"github.com/etherinus/cfgstack/internal/errx"
+	"github.com/etherinus/cfgstack/internal/prov"
 )
 
 type segment struct {

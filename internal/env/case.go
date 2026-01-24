@@ -3,7 +3,7 @@ package env
 import (
 	"strings"
 
-	"github.com/etherinus/cfg-fuse/internal/errx"
+	"github.com/etherinus/cfgstack/internal/errx"
 )
 
 type CaseMode int

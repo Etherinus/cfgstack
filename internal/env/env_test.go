@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/etherinus/cfg-fuse/internal/prov"
+	"github.com/etherinus/cfgstack/internal/prov"
 )
 
 func TestApplyLower(t *testing.T) {

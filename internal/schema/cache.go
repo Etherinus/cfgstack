@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/etherinus/cfg-fuse/internal/errx"
+	"github.com/etherinus/cfgstack/internal/errx"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 

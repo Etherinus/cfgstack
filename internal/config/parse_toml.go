@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github.com/etherinus/cfg-fuse/internal/errx"
+	"github.com/etherinus/cfgstack/internal/errx"
 	"github.com/pelletier/go-toml/v2"
 )
 

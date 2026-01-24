@@ -4,9 +4,9 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/etherinus/cfg-fuse/internal/errx"
-	"github.com/etherinus/cfg-fuse/internal/inspect"
-	"github.com/etherinus/cfg-fuse/internal/prov"
+	"github.com/etherinus/cfgstack/internal/errx"
+	"github.com/etherinus/cfgstack/internal/inspect"
+	"github.com/etherinus/cfgstack/internal/prov"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 

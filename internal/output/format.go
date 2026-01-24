@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/etherinus/cfg-fuse/internal/errx"
+	"github.com/etherinus/cfgstack/internal/errx"
 )
 
 type Format string

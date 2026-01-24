@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/etherinus/cfg-fuse/internal/config"
-	"github.com/etherinus/cfg-fuse/internal/inspect"
-	"github.com/etherinus/cfg-fuse/internal/prov"
+	"github.com/etherinus/cfgstack/internal/config"
+	"github.com/etherinus/cfgstack/internal/inspect"
+	"github.com/etherinus/cfgstack/internal/prov"
 )
 
 type Report struct {

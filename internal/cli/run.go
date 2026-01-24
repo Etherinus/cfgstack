@@ -9,13 +9,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/etherinus/cfg-fuse/internal/config"
-	"github.com/etherinus/cfg-fuse/internal/doctor"
-	"github.com/etherinus/cfg-fuse/internal/env"
-	"github.com/etherinus/cfg-fuse/internal/inspect"
-	"github.com/etherinus/cfg-fuse/internal/output"
-	"github.com/etherinus/cfg-fuse/internal/prov"
-	"github.com/etherinus/cfg-fuse/internal/schema"
+	"github.com/etherinus/cfgstack/internal/config"
+	"github.com/etherinus/cfgstack/internal/doctor"
+	"github.com/etherinus/cfgstack/internal/env"
+	"github.com/etherinus/cfgstack/internal/inspect"
+	"github.com/etherinus/cfgstack/internal/output"
+	"github.com/etherinus/cfgstack/internal/prov"
+	"github.com/etherinus/cfgstack/internal/schema"
 )
 
 func Run(args []string) int {
@@ -47,7 +47,7 @@ func Run(args []string) int {
 }
 
 func runBuild(stdout, stderr io.Writer, args []string) int {
-	fs := flag.NewFlagSet("cfg-fuse build", flag.ContinueOnError)
+	fs := flag.NewFlagSet("cfgstack build", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 
 	inDir := fs.String("in", "config", "input config directory")
@@ -174,7 +174,7 @@ type explainJSONOut struct {
 }
 
 func runExplain(stdout, stderr io.Writer, args []string) int {
-	fs := flag.NewFlagSet("cfg-fuse explain", flag.ContinueOnError)
+	fs := flag.NewFlagSet("cfgstack explain", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 
 	inDir := fs.String("in", "config", "input config directory")
@@ -309,7 +309,7 @@ func runExplain(stdout, stderr io.Writer, args []string) int {
 }
 
 func runDoctor(stdout, stderr io.Writer, args []string) int {
-	fs := flag.NewFlagSet("cfg-fuse doctor", flag.ContinueOnError)
+	fs := flag.NewFlagSet("cfgstack doctor", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 
 	inDir := fs.String("in", "config", "input config directory")
@@ -399,26 +399,26 @@ func writeSourcesJSON(w io.Writer, p *prov.Map) error {
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprintln(w, "cfg-fuse")
+	fmt.Fprintln(w, "cfgstack")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  cfg-fuse build --in config/ --profile prod --out merged.json")
-	fmt.Fprintln(w, "  cfg-fuse explain --in config/ --profile prod --at /db/host")
-	fmt.Fprintln(w, "  cfg-fuse doctor --in config/ --profile prod")
+	fmt.Fprintln(w, "  cfgstack build --in config/ --profile prod --out merged.json")
+	fmt.Fprintln(w, "  cfgstack explain --in config/ --profile prod --at /db/host")
+	fmt.Fprintln(w, "  cfgstack doctor --in config/ --profile prod")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Commands:")
 	fmt.Fprintln(w, "  build      merge config layers and apply env overrides")
 	fmt.Fprintln(w, "  explain    inspect value, context, and provenance at JSON Pointer")
 	fmt.Fprintln(w, "  doctor     check config directory and report layer conflicts")
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Run 'cfg-fuse <cmd> --help' for options")
+	fmt.Fprintln(w, "Run 'cfgstack <cmd> --help' for options")
 }
 
 func printBuildUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  cfg-fuse build --in config/ --profile prod --out merged.json")
-	fmt.Fprintln(w, "  cfg-fuse build --in config/ --allow-empty-profile --out merged.json")
-	fmt.Fprintln(w, "  cfg-fuse build --in config/ --profile prod --out - --format json")
+	fmt.Fprintln(w, "  cfgstack build --in config/ --profile prod --out merged.json")
+	fmt.Fprintln(w, "  cfgstack build --in config/ --allow-empty-profile --out merged.json")
+	fmt.Fprintln(w, "  cfgstack build --in config/ --profile prod --out - --format json")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Layers, in order:")
 	fmt.Fprintln(w, "  default.*")
@@ -444,8 +444,8 @@ func printBuildUsage(w io.Writer) {
 
 func printExplainUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  cfg-fuse explain --in config/ --profile prod --at /a/b")
-	fmt.Fprintln(w, "  cfg-fuse explain --in config/ --allow-empty-profile --at /")
+	fmt.Fprintln(w, "  cfgstack explain --in config/ --profile prod --at /a/b")
+	fmt.Fprintln(w, "  cfgstack explain --in config/ --allow-empty-profile --at /")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Flags:")
 	fmt.Fprintln(w, "  --in                  input config directory (default: config)")
@@ -461,8 +461,8 @@ func printExplainUsage(w io.Writer) {
 
 func printDoctorUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  cfg-fuse doctor --in config/ --profile prod")
-	fmt.Fprintln(w, "  cfg-fuse doctor --in config/ --allow-empty-profile")
+	fmt.Fprintln(w, "  cfgstack doctor --in config/ --profile prod")
+	fmt.Fprintln(w, "  cfgstack doctor --in config/ --allow-empty-profile")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Flags:")
 	fmt.Fprintln(w, "  --in                      input config directory (default: config)")

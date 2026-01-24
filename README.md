@@ -1,6 +1,6 @@
-# cfg-fuse
+# cfgstack
 
-`cfg-fuse` is a small Go CLI that builds a final configuration by merging file-based layers (JSON/YAML/TOML) and applying environment-variable overrides.
+`cfgstack` is a small Go CLI that builds a final configuration by merging file-based layers (JSON/YAML/TOML) and applying environment-variable overrides.
 
 Use case: services, bots, games, CLIs, anything you deploy across environments.
 
@@ -35,7 +35,7 @@ Use case: services, bots, games, CLIs, anything you deploy across environments.
 ### Install from source
 
 ```bash
-go install github.com/etherinus/cfg-fuse/cmd/cfg-fuse@latest
+go install github.com/etherinus/cfgstack/cmd/cfgstack@latest
 ```
 
 Make sure `$GOBIN` (or `$GOPATH/bin`) is on your `PATH`.
@@ -43,7 +43,7 @@ Make sure `$GOBIN` (or `$GOPATH/bin`) is on your `PATH`.
 ### Build locally
 
 ```bash
-go build -o cfg-fuse ./cmd/cfg-fuse
+go build -o cfgstack ./cmd/cfgstack
 ```
 
 ## Quick start
@@ -61,13 +61,13 @@ config/
 Build merged config for prod:
 
 ```bash
-cfg-fuse build --in config --profile prod --out merged.json
+cfgstack build --in config --profile prod --out merged.json
 ```
 
 Write to stdout:
 
 ```bash
-cfg-fuse build --in config --profile prod --out - --format json
+cfgstack build --in config --profile prod --out - --format json
 ```
 
 Apply env overrides:
@@ -75,7 +75,7 @@ Apply env overrides:
 ```bash
 export APP__DB__HOST=localhost
 export APP__DB__PORT=5432
-cfg-fuse build --in config --profile prod --out merged.json
+cfgstack build --in config --profile prod --out merged.json
 ```
 
 ## Layering model
@@ -140,7 +140,7 @@ Env values are parsed as:
 Enable with `--schema`:
 
 ```bash
-cfg-fuse build --in config --profile prod --out merged.json --schema schema.json
+cfgstack build --in config --profile prod --out merged.json --schema schema.json
 ```
 
 Schema references:
@@ -165,17 +165,17 @@ Schema compilation is cached within the process:
 
 ## Commands
 
-### `cfg-fuse build`
+### `cfgstack build`
 
 Build the final config.
 
 Examples:
 
 ```bash
-cfg-fuse build --in config --profile prod --out merged.json
-cfg-fuse build --in config --profile prod --out - --format yaml
-cfg-fuse build --in config --allow-empty-profile --out merged.json
-cfg-fuse build --in config --profile prod --fail-on-missing-default --out merged.json
+cfgstack build --in config --profile prod --out merged.json
+cfgstack build --in config --profile prod --out - --format yaml
+cfgstack build --in config --allow-empty-profile --out merged.json
+cfgstack build --in config --profile prod --fail-on-missing-default --out merged.json
 ```
 
 Notable flags:
@@ -187,22 +187,22 @@ Notable flags:
 Provenance dump:
 
 ```bash
-cfg-fuse build --in config --profile prod --out merged.json --print-sources > sources.json
+cfgstack build --in config --profile prod --out merged.json --print-sources > sources.json
 ```
 
 Note: when `--print-sources` is set, the status line (`ok: ...`) is printed to stderr so stdout remains valid JSON.
 
-### `cfg-fuse explain`
+### `cfgstack explain`
 
 Inspect a JSON Pointer in the merged config.
 
 Examples:
 
 ```bash
-cfg-fuse explain --in config --profile prod --at /db/host
-cfg-fuse explain --in config --profile prod --at / --sources
-cfg-fuse explain --in config --profile prod --at /db/host --json
-cfg-fuse explain --in config --profile prod --at / --json --sources
+cfgstack explain --in config --profile prod --at /db/host
+cfgstack explain --in config --profile prod --at / --sources
+cfgstack explain --in config --profile prod --at /db/host --json
+cfgstack explain --in config --profile prod --at / --json --sources
 ```
 
 * `--json` prints structured JSON output.
@@ -211,7 +211,7 @@ cfg-fuse explain --in config --profile prod --at / --json --sources
   * for `/` it lists top-level keys
   * for an object/array node it lists its direct children
 
-### `cfg-fuse doctor`
+### `cfgstack doctor`
 
 Diagnose a config directory.
 
@@ -226,7 +226,7 @@ What it checks:
 Example:
 
 ```bash
-cfg-fuse doctor --in config --profile prod --fail-on-missing-default --max-conflicts 100
+cfgstack doctor --in config --profile prod --fail-on-missing-default --max-conflicts 100
 ```
 
 `doctor` exits non-zero if:
@@ -245,7 +245,7 @@ cfg-fuse doctor --in config --profile prod --fail-on-missing-default --max-confl
 Typical Go CLI structure:
 
 ```text
-cmd/cfg-fuse/main.go - entrypoint
+cmd/cfgstack/main.go - entrypoint
 internal/cli         - flags and command orchestration
 internal/config      - layer discovery and config parsing
 internal/env         - env overrides
@@ -262,4 +262,4 @@ internal/errx        - unified error formatting
 
 * Arrays are replaced, not merged. If you need additive semantics, model it as objects or use explicit indices from env.
 * If you use `--env-case lower`, ensure your schema and file keys match the expected casing.
-* If you want deterministic env application order, `cfg-fuse` sorts the environment variable list before applying.
+* If you want deterministic env application order, `cfgstack` sorts the environment variable list before applying.

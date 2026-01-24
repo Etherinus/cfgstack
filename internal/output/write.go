@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/etherinus/cfg-fuse/internal/errx"
+	"github.com/etherinus/cfgstack/internal/errx"
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
 )

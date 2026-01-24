@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/etherinus/cfg-fuse/internal/errx"
-	"github.com/etherinus/cfg-fuse/internal/merge"
-	"github.com/etherinus/cfg-fuse/internal/prov"
+	"github.com/etherinus/cfgstack/internal/errx"
+	"github.com/etherinus/cfgstack/internal/merge"
+	"github.com/etherinus/cfgstack/internal/prov"
 )
 
 type Source struct {

@@ -1,4 +1,4 @@
-module github.com/etherinus/cfg-fuse
+module github.com/etherinus/cfgstack
 
 go 1.22
 

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/etherinus/cfg-fuse/internal/cli"
+	"github.com/etherinus/cfgstack/internal/cli"
 )
 
 func main() {

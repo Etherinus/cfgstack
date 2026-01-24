@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/etherinus/cfg-fuse/internal/errx"
+	"github.com/etherinus/cfgstack/internal/errx"
 )
 
 func parseJSON(path string, b []byte) (any, error) {

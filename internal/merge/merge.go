@@ -3,7 +3,7 @@ package merge
 import (
 	"sort"
 
-	"github.com/etherinus/cfg-fuse/internal/prov"
+	"github.com/etherinus/cfgstack/internal/prov"
 )
 
 func Deep(base, overlay map[string]any) (map[string]any, error) {
