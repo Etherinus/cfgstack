@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/etherinus/cfgstack/internal/buildinfo"
 	"github.com/etherinus/cfgstack/internal/config"
 	"github.com/etherinus/cfgstack/internal/doctor"
 	"github.com/etherinus/cfgstack/internal/env"
@@ -31,6 +32,10 @@ func Run(args []string) int {
 		printUsage(stdout)
 		return 0
 	}
+	if cmd == "-v" || cmd == "--version" {
+		printVersion(stdout)
+		return 0
+	}
 
 	switch cmd {
 	case "build":
@@ -39,6 +44,8 @@ func Run(args []string) int {
 		return runExplain(stdout, stderr, args[2:])
 	case "doctor":
 		return runDoctor(stdout, stderr, args[2:])
+	case "version":
+		return runVersion(stdout, stderr, args[2:])
 	default:
 		fmt.Fprintf(stderr, "unknown command: %s\n\n", cmd)
 		printUsage(stderr)
@@ -63,6 +70,8 @@ func runBuild(stdout, stderr io.Writer, args []string) int {
 	strictSchema := fs.Bool("schema-strict", false, "fail on unknown schema refs")
 	verbose := fs.Bool("verbose", false, "print applied layers in order")
 	printSources := fs.Bool("print-sources", false, "print provenance map as JSON to stdout (requires --out not '-')")
+	dryRun := fs.Bool("dry-run", false, "build config but do not write output file")
+	showDiff := fs.Bool("diff", false, "with --dry-run, print pointer-level diff against existing --out file")
 	showHelp := fs.Bool("h", false, "show help")
 	showHelp2 := fs.Bool("help", false, "show help")
 
@@ -96,6 +105,14 @@ func runBuild(stdout, stderr io.Writer, args []string) int {
 	}
 	if *printSources && *outPath == "-" {
 		fmt.Fprintln(stderr, "--print-sources requires --out not '-' (stdout is used for sources JSON)")
+		return 2
+	}
+	if *showDiff && !*dryRun {
+		fmt.Fprintln(stderr, "--diff requires --dry-run")
+		return 2
+	}
+	if *showDiff && *outPath == "-" {
+		fmt.Fprintln(stderr, "--diff requires --out not '-'")
 		return 2
 	}
 
@@ -141,6 +158,18 @@ func runBuild(stdout, stderr io.Writer, args []string) int {
 			fmt.Fprintf(stderr, "%s\n", formatErr(err))
 			return 1
 		}
+	}
+
+	if *dryRun {
+		if *showDiff {
+			if err := printBuildDiff(stdout, *outPath, fmtStr, cfg); err != nil {
+				fmt.Fprintf(stderr, "%s\n", formatErr(err))
+				return 1
+			}
+			return 0
+		}
+		fmt.Fprintln(stdout, "ok: dry-run (no file written)")
+		return 0
 	}
 
 	if *outPath == "-" {
@@ -317,6 +346,7 @@ func runDoctor(stdout, stderr io.Writer, args []string) int {
 	allowEmptyProfile := fs.Bool("allow-empty-profile", false, "allow empty profile and skip <profile>.* layer")
 	failMissingDefault := fs.Bool("fail-on-missing-default", false, "fail if no default.* files found")
 	maxConflicts := fs.Int("max-conflicts", 50, "max number of conflicts to print")
+	asJSON := fs.Bool("json", false, "print structured JSON output")
 	showHelp := fs.Bool("h", false, "show help")
 	showHelp2 := fs.Bool("help", false, "show help")
 
@@ -346,7 +376,7 @@ func runDoctor(stdout, stderr io.Writer, args []string) int {
 		return 1
 	}
 
-	cfg, provMap, sources, err := config.LoadLayers(*inDir, *profile, *failMissingDefault, *allowEmptyProfile)
+	cfg, provMap, sources, err := config.LoadLayers(*inDir, *profile, false, *allowEmptyProfile)
 	if err != nil {
 		fmt.Fprintf(stderr, "%s\n", formatErr(err))
 		return 1
@@ -360,11 +390,63 @@ func runDoctor(stdout, stderr io.Writer, args []string) int {
 		MaxConflicts:       *maxConflicts,
 		FailMissingDefault: *failMissingDefault,
 	}
-	ok := rep.Print(stdout)
+	ok := false
+	if *asJSON {
+		out := rep.JSON()
+		b, err := json.MarshalIndent(out, "", "  ")
+		if err != nil {
+			fmt.Fprintf(stderr, "%s\n", err.Error())
+			return 1
+		}
+		b = append(b, '\n')
+		_, _ = stdout.Write(b)
+		ok = out.Ok
+	} else {
+		ok = rep.Print(stdout)
+	}
 
 	if !ok {
 		return 1
 	}
+	return 0
+}
+
+func runVersion(stdout, stderr io.Writer, args []string) int {
+	fs := flag.NewFlagSet("cfgstack version", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+
+	asJSON := fs.Bool("json", false, "print structured JSON output")
+	showHelp := fs.Bool("h", false, "show help")
+	showHelp2 := fs.Bool("help", false, "show help")
+
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(stderr, "%s\n\n", err.Error())
+		printVersionUsage(stderr)
+		return 2
+	}
+	if *showHelp || *showHelp2 {
+		printVersionUsage(stdout)
+		return 0
+	}
+	if fs.NArg() > 0 {
+		fmt.Fprintln(stderr, "version command does not accept positional arguments")
+		printVersionUsage(stderr)
+		return 2
+	}
+
+	info := buildinfo.Current()
+	if *asJSON {
+		b, err := json.MarshalIndent(info, "", "  ")
+		if err != nil {
+			fmt.Fprintf(stderr, "%s\n", err.Error())
+			return 1
+		}
+		b = append(b, '\n')
+		_, _ = stdout.Write(b)
+		return 0
+	}
+
+	fmt.Fprintln(stdout, info.String())
 	return 0
 }
 
@@ -405,13 +487,75 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  cfgstack build --in config/ --profile prod --out merged.json")
 	fmt.Fprintln(w, "  cfgstack explain --in config/ --profile prod --at /db/host")
 	fmt.Fprintln(w, "  cfgstack doctor --in config/ --profile prod")
+	fmt.Fprintln(w, "  cfgstack version [--json]")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Commands:")
-	fmt.Fprintln(w, "  build      merge config layers and apply env overrides")
-	fmt.Fprintln(w, "  explain    inspect value, context, and provenance at JSON Pointer")
-	fmt.Fprintln(w, "  doctor     check config directory and report layer conflicts")
+	fmt.Fprintln(w, "  build merge config layers and apply env overrides")
+	fmt.Fprintln(w, "  explain inspect value, context, and provenance at JSON Pointer")
+	fmt.Fprintln(w, "  doctor check config directory and report layer conflicts")
+	fmt.Fprintln(w, "  version print version and build info (--json supported)")
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Run 'cfgstack <cmd> --help' for options")
+	fmt.Fprintln(w, "Global flags:")
+	fmt.Fprintln(w, "  -h, --help show help")
+	fmt.Fprintln(w, "  -v, --version show version")
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Run 'cfgstack <cmd> --help' for command options")
+}
+
+func printVersion(w io.Writer) {
+	fmt.Fprintln(w, buildinfo.String())
+}
+
+func printVersionUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "  cfgstack version")
+	fmt.Fprintln(w, "  cfgstack version --json")
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Flags:")
+	fmt.Fprintln(w, "  --json print structured JSON output")
+}
+
+func printBuildDiff(stdout io.Writer, outPath string, format output.Format, cfg any) error {
+	existing := map[string]any{}
+
+	if _, err := os.Stat(outPath); err == nil {
+		v, err := output.ReadFile(outPath, format)
+		if err != nil {
+			return err
+		}
+		existing = asObjectOrRoot(v)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	diff := inspect.Diff(existing, cfg)
+	if len(diff) == 0 {
+		fmt.Fprintln(stdout, "diff: no changes")
+		return nil
+	}
+
+	for _, d := range diff {
+		switch d.Kind {
+		case inspect.DiffAdd:
+			fmt.Fprintf(stdout, "+ %s = %s\n", d.Ptr, inspect.CompactJSON(d.New))
+		case inspect.DiffRemove:
+			fmt.Fprintf(stdout, "- %s (was %s)\n", d.Ptr, inspect.CompactJSON(d.Old))
+		case inspect.DiffChange:
+			fmt.Fprintf(stdout, "~ %s: %s -> %s\n", d.Ptr, inspect.CompactJSON(d.Old), inspect.CompactJSON(d.New))
+		}
+	}
+	return nil
+}
+
+func asObjectOrRoot(v any) map[string]any {
+	if v == nil {
+		return map[string]any{}
+	}
+	m, ok := v.(map[string]any)
+	if ok {
+		return m
+	}
+	return map[string]any{"$": v}
 }
 
 func printBuildUsage(w io.Writer) {
@@ -427,19 +571,21 @@ func printBuildUsage(w io.Writer) {
 	fmt.Fprintln(w, "  env vars: <ENV_PREFIX><DELIM>path")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Flags:")
-	fmt.Fprintln(w, "  --in                      input config directory (default: config)")
-	fmt.Fprintln(w, "  --profile                 profile name, for example prod or dev")
-	fmt.Fprintln(w, "  --allow-empty-profile     allow empty profile and skip <profile>.* layer")
+	fmt.Fprintln(w, "  --in input config directory (default: config)")
+	fmt.Fprintln(w, "  --profile profile name, for example prod or dev")
+	fmt.Fprintln(w, "  --allow-empty-profile allow empty profile and skip <profile>.* layer")
 	fmt.Fprintln(w, "  --fail-on-missing-default fail if no default.* files found")
-	fmt.Fprintln(w, "  --out                     output path or '-' for stdout")
-	fmt.Fprintln(w, "  --format                  output format override: json|yaml|toml (useful with --out -)")
-	fmt.Fprintln(w, "  --env-prefix              env var prefix (default: APP)")
-	fmt.Fprintln(w, "  --env-delim               env var delimiter (default: __)")
-	fmt.Fprintln(w, "  --env-case                env key casing: lower|keep (default: lower)")
-	fmt.Fprintln(w, "  --schema                  path/URL to JSON Schema (optional): file path, file://, http(s)://")
-	fmt.Fprintln(w, "  --schema-strict           fail on unknown schema refs")
-	fmt.Fprintln(w, "  --verbose                 print applied layers in order")
-	fmt.Fprintln(w, "  --print-sources           print provenance map JSON to stdout (requires --out not '-')")
+	fmt.Fprintln(w, "  --out output path or '-' for stdout")
+	fmt.Fprintln(w, "  --format output format override: json|yaml|toml (useful with --out -)")
+	fmt.Fprintln(w, "  --env-prefix env var prefix (default: APP)")
+	fmt.Fprintln(w, "  --env-delim env var delimiter (default: __)")
+	fmt.Fprintln(w, "  --env-case env key casing: lower|keep (default: lower)")
+	fmt.Fprintln(w, "  --schema path/URL to JSON Schema (optional): file path, file://, http(s)://")
+	fmt.Fprintln(w, "  --schema-strict fail on unknown schema refs")
+	fmt.Fprintln(w, "  --verbose print applied layers in order")
+	fmt.Fprintln(w, "  --print-sources print provenance map JSON to stdout (requires --out not '-')")
+	fmt.Fprintln(w, "  --dry-run build config but do not write output file")
+	fmt.Fprintln(w, "  --diff with --dry-run, print pointer-level diff against existing --out file")
 }
 
 func printExplainUsage(w io.Writer) {
@@ -448,15 +594,15 @@ func printExplainUsage(w io.Writer) {
 	fmt.Fprintln(w, "  cfgstack explain --in config/ --allow-empty-profile --at /")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Flags:")
-	fmt.Fprintln(w, "  --in                  input config directory (default: config)")
-	fmt.Fprintln(w, "  --profile             profile name, for example prod or dev")
+	fmt.Fprintln(w, "  --in input config directory (default: config)")
+	fmt.Fprintln(w, "  --profile profile name, for example prod or dev")
 	fmt.Fprintln(w, "  --allow-empty-profile allow empty profile and skip <profile>.* layer")
-	fmt.Fprintln(w, "  --at                  JSON Pointer to inspect (required)")
-	fmt.Fprintln(w, "  --json                print structured JSON output")
-	fmt.Fprintln(w, "  --sources             print nearest sources for direct children at pointer (root: top-level)")
-	fmt.Fprintln(w, "  --env-prefix          env var prefix (default: APP)")
-	fmt.Fprintln(w, "  --env-delim           env var delimiter (default: __)")
-	fmt.Fprintln(w, "  --env-case            env key casing: lower|keep (default: lower)")
+	fmt.Fprintln(w, "  --at JSON Pointer to inspect (required)")
+	fmt.Fprintln(w, "  --json print structured JSON output")
+	fmt.Fprintln(w, "  --sources print nearest sources for direct children at pointer (root: top-level)")
+	fmt.Fprintln(w, "  --env-prefix env var prefix (default: APP)")
+	fmt.Fprintln(w, "  --env-delim env var delimiter (default: __)")
+	fmt.Fprintln(w, "  --env-case env key casing: lower|keep (default: lower)")
 }
 
 func printDoctorUsage(w io.Writer) {
@@ -465,9 +611,10 @@ func printDoctorUsage(w io.Writer) {
 	fmt.Fprintln(w, "  cfgstack doctor --in config/ --allow-empty-profile")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Flags:")
-	fmt.Fprintln(w, "  --in                      input config directory (default: config)")
-	fmt.Fprintln(w, "  --profile                 profile name, for example prod or dev")
-	fmt.Fprintln(w, "  --allow-empty-profile     allow empty profile and skip <profile>.* layer")
+	fmt.Fprintln(w, "  --in input config directory (default: config)")
+	fmt.Fprintln(w, "  --profile profile name, for example prod or dev")
+	fmt.Fprintln(w, "  --allow-empty-profile allow empty profile and skip <profile>.* layer")
 	fmt.Fprintln(w, "  --fail-on-missing-default fail if no default.* files found")
-	fmt.Fprintln(w, "  --max-conflicts           max number of conflicts to print (default: 50)")
+	fmt.Fprintln(w, "  --max-conflicts max number of conflicts to print (default: 50)")
+	fmt.Fprintln(w, "  --json print structured JSON output")
 }

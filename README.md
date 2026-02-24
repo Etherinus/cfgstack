@@ -1,34 +1,87 @@
 # cfgstack
 
-`cfgstack` is a small Go CLI that builds a final configuration by merging file-based layers (JSON/YAML/TOML) and applying environment-variable overrides.
+`cfgstack` is a production-focused CLI for building a final configuration from layered files and environment variable overrides.
 
-Use case: services, bots, games, CLIs, anything you deploy across environments.
+I built it to solve a common problem in real systems: config drift across `dev`, `staging`, and `prod`, plus hard-to-debug implicit overrides.
 
-## What you get
+## Why this exists
 
-* Layered configs from a directory:
+The goals are straightforward:
 
-  * `default.*`
-  * `local.*` (typically not committed)
-  * `<profile>.*` (for example `prod.*`, `dev.*`)
-* Supported formats: **JSON**, **YAML**, **TOML**
-* Predictable deep merge rules for objects
-* Env overrides with hierarchical paths:
+- deterministic behavior in local runs, CI, and production;
+- explicit merge rules (no hidden magic);
+- fast root-cause analysis when config is wrong.
 
-  * `APP__DB__HOST=localhost` -> `{ "db": { "host": "localhost" } }`
-* Array indices via env paths:
+`cfgstack` is designed around those constraints.
 
-  * `APP__SERVERS__0__HOST=...`
-* Optional JSON Schema validation (local path, `file://`, `http(s)://`)
-* Good error messages:
+## Who this is for
 
-  * JSON Pointer location
-  * value context (value + parent info)
-  * nearest source (which file or env var last touched the pointer)
-* Debug tooling:
+This tool is useful for teams that:
 
-  * `explain` shows value + provenance for a pointer
-  * `doctor` scans your config directory and reports conflicts and issues
+- run the same service across multiple environments;
+- need profile-based config (`prod`, `dev`, etc.);
+- rely on env overrides but still want control and traceability;
+- require schema validation and strong diagnostics.
+
+Typical use cases: backend services, workers, bots, game servers, internal CLIs.
+
+## What cfgstack does
+
+- Loads layered config files:
+  - `default.*`
+  - `local.*`
+  - `<profile>.*` (for example `prod.*`, `dev.*`)
+- Supports `JSON`, `YAML`, `TOML`.
+- Deep-merges objects using deterministic rules.
+- Applies hierarchical env overrides.
+- Tracks provenance (the last source that wrote each JSON Pointer).
+- Validates the final config against JSON Schema.
+- Provides debugging commands:
+  - `explain` for pointer-level inspection;
+  - `doctor` for directory diagnostics and conflict analysis.
+
+## How it works
+
+### Layer order
+
+Layers are always applied in this order:
+
+1. `default.*`
+2. `local.*`
+3. `<profile>.*`
+4. env overrides
+
+If multiple files match a layer, files are applied in lexicographic filename order.
+
+### Merge semantics
+
+- object + object: recursive merge
+- arrays: full replacement by later layer
+- scalars (`string`, `bool`, `number`, `null`): replacement by later layer
+- type mismatch: later layer wins
+
+This behavior is intentionally simple and predictable.
+
+### Environment overrides
+
+Defaults:
+
+- `--env-prefix APP`
+- `--env-delim __`
+- `--env-case lower`
+
+Examples:
+
+- `APP__DB__HOST=localhost` -> `{ "db": { "host": "localhost" } }`
+- `APP__SERVERS__0__HOST=10.0.0.1` -> `{ "servers": [ { "host": "10.0.0.1" } ] }`
+
+Value typing:
+
+- `true/false/null` -> bool/null
+- integer -> `int64`
+- float -> `float64`
+- values starting with `{` or `[` -> JSON parse
+- otherwise -> string
 
 ## Installation
 
@@ -38,17 +91,21 @@ Use case: services, bots, games, CLIs, anything you deploy across environments.
 go install github.com/etherinus/cfgstack/cmd/cfgstack@latest
 ```
 
-Make sure `$GOBIN` (or `$GOPATH/bin`) is on your `PATH`.
-
 ### Build locally
 
 ```bash
 go build -o cfgstack ./cmd/cfgstack
 ```
 
+Build with metadata:
+
+```bash
+go build -ldflags "-X github.com/etherinus/cfgstack/internal/buildinfo.Version=v0.1.0 -X github.com/etherinus/cfgstack/internal/buildinfo.Commit=$(git rev-parse HEAD) -X github.com/etherinus/cfgstack/internal/buildinfo.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o cfgstack ./cmd/cfgstack
+```
+
 ## Quick start
 
-Example `config/` structure:
+Example layout:
 
 ```text
 config/
@@ -58,7 +115,7 @@ config/
   dev.yaml
 ```
 
-Build merged config for prod:
+Build merged config:
 
 ```bash
 cfgstack build --in config --profile prod --out merged.json
@@ -70,196 +127,154 @@ Write to stdout:
 cfgstack build --in config --profile prod --out - --format json
 ```
 
-Apply env overrides:
+Dry run without writing:
 
 ```bash
-export APP__DB__HOST=localhost
-export APP__DB__PORT=5432
-cfgstack build --in config --profile prod --out merged.json
+cfgstack build --in config --allow-empty-profile --out merged.json --dry-run
 ```
 
-## Layering model
-
-### Layer order
-
-1. `default.*`
-2. `local.*`
-3. `<profile>.*` (skipped if profile is empty and `--allow-empty-profile` is enabled)
-4. env overrides
-
-If a layer matches multiple files, they are applied in **lexicographic filename order**.
-
-### Merge rules
-
-* object + object: recursive merge
-* arrays: replaced as a whole by later layer
-* scalars (string/bool/number/null): replaced by later layer
-* type mismatch: later layer wins
-
-This is intentionally simple and predictable (arrays are not "smart merged").
-
-## Env overrides
-
-### Prefix and delimiter
-
-Only variables with `<ENV_PREFIX><DELIM>` prefix are used.
-
-Defaults:
-
-* `--env-prefix APP`
-* `--env-delim __`
-
-Example:
-
-* `APP__A__B=1` -> `{ "a": { "b": 1 } }` (with `--env-case lower`)
-
-### Arrays by index
-
-If a path segment is all digits, it is treated as an array index:
-
-* `APP__A__B__0=1` -> `{ "a": { "b": [1] } }`
-* `APP__A__B__0__X=1` -> `{ "a": { "b": [ { "x": 1 } ] } }`
-
-### Key casing
-
-* `--env-case lower` (default): env keys are lowercased
-* `--env-case keep`: env keys are kept as-is
-
-### Value typing
-
-Env values are parsed as:
-
-* `true/false/null` -> bool/null
-* integer -> int64
-* float -> float64
-* if the trimmed value starts with `{` or `[` -> attempt JSON parse
-* otherwise -> string
-
-## JSON Schema validation
-
-Enable with `--schema`:
+Dry run with pointer-level diff against existing output file:
 
 ```bash
-cfgstack build --in config --profile prod --out merged.json --schema schema.json
+cfgstack build --in config --allow-empty-profile --out merged.json --dry-run --diff
 ```
-
-Schema references:
-
-* local path: `schema.json`
-* file URL: `file:///home/me/schema.json`
-* HTTP(S): `https://example.com/schema.json`
-
-`--schema-strict` enables stricter compiler assertions.
-
-On validation failure, the error includes:
-
-* JSON Pointer (instance location)
-* nested validation causes
-* context block (value + parent info)
-* nearest provenance source (file/env)
-
-Schema compilation is cached within the process:
-
-* local files: abs path + mtime + size + strict mode
-* URLs: URL string + strict mode
 
 ## Commands
 
 ### `cfgstack build`
 
-Build the final config.
+Builds final config from file layers and env overrides.
 
-Examples:
+Important flags:
 
-```bash
-cfgstack build --in config --profile prod --out merged.json
-cfgstack build --in config --profile prod --out - --format yaml
-cfgstack build --in config --allow-empty-profile --out merged.json
-cfgstack build --in config --profile prod --fail-on-missing-default --out merged.json
-```
+- `--profile` is required unless `--allow-empty-profile` is set.
+- `--fail-on-missing-default` fails when no `default.*` files are found.
+- `--print-sources` outputs provenance map JSON.
+- `--dry-run` computes result without writing output file.
+- `--diff` (with `--dry-run`) prints pointer-level diff vs current `--out`.
+- `--schema` and `--schema-strict` enable JSON Schema validation.
 
-Notable flags:
+Notes:
 
-* `--fail-on-missing-default` - fail if no `default.*` files are found
-* `--allow-empty-profile` - allow empty profile and skip `<profile>.*`
-* `--print-sources` - print provenance map (pointer -> source) as JSON to stdout
-
-Provenance dump:
-
-```bash
-cfgstack build --in config --profile prod --out merged.json --print-sources > sources.json
-```
-
-Note: when `--print-sources` is set, the status line (`ok: ...`) is printed to stderr so stdout remains valid JSON.
+- `--print-sources` requires `--out` not `-`.
+- `--diff` requires `--dry-run` and `--out` not `-`.
 
 ### `cfgstack explain`
 
-Inspect a JSON Pointer in the merged config.
-
-Examples:
+Inspect a JSON Pointer in resolved config:
 
 ```bash
 cfgstack explain --in config --profile prod --at /db/host
 cfgstack explain --in config --profile prod --at / --sources
 cfgstack explain --in config --profile prod --at /db/host --json
-cfgstack explain --in config --profile prod --at / --json --sources
 ```
 
-* `--json` prints structured JSON output.
-* `--sources` prints nearest sources for direct children at the pointer:
+Includes:
 
-  * for `/` it lists top-level keys
-  * for an object/array node it lists its direct children
+- value;
+- local context (parent/type/key/index);
+- nearest provenance source;
+- optional child sources (`--sources`).
 
 ### `cfgstack doctor`
 
-Diagnose a config directory.
-
-What it checks:
-
-* directory exists and is readable
-* which files are found per layer
-* unsupported extensions per layer
-* applied order
-* pointer-level overrides (conflicts): where the same pointer was set by multiple files
-
-Example:
+Diagnose config directory health:
 
 ```bash
 cfgstack doctor --in config --profile prod --fail-on-missing-default --max-conflicts 100
+cfgstack doctor --in config --allow-empty-profile --json
 ```
 
-`doctor` exits non-zero if:
+Checks:
 
-* conflicts are found
-* `--fail-on-missing-default` is set and no `default.*` exists
+- discovered files per layer;
+- supported vs unsupported extensions;
+- effective apply order;
+- pointer-level override conflicts.
+
+Exit behavior:
+
+- non-zero if conflicts exist;
+- non-zero if `--fail-on-missing-default` and no `default.*`.
+
+`--json` returns structured scan/sources/conflict data and final `ok` status.
+
+### `cfgstack version`
+
+```bash
+cfgstack version
+cfgstack --version
+cfgstack version --json
+```
+
+JSON fields:
+
+- `name`
+- `version`
+- `commit`
+- `date`
+
+## JSON Schema validation
+
+Enable validation:
+
+```bash
+cfgstack build --in config --profile prod --out merged.json --schema schema.json
+```
+
+Supported schema refs:
+
+- local path: `schema.json`
+- file URL: `file:///.../schema.json`
+- HTTP(S): `https://...`
+
+Validation errors include:
+
+- JSON Pointer;
+- nested causes;
+- value context;
+- nearest provenance source.
 
 ## Exit codes
 
-* `0` - success
-* `1` - runtime error (I/O, parse, schema validation, doctor found issues)
-* `2` - CLI argument error
+- `0` success
+- `1` runtime/validation/doctor failure
+- `2` CLI argument error
+
+## CI and releases
+
+- CI: `.github/workflows/ci.yml`
+  - `go mod tidy` check
+  - `go vet ./...`
+  - `go test ./...`
+  - release-build smoke check
+- Release: `.github/workflows/release.yml`
+  - triggered by tags `v*`
+  - builds Linux/macOS/Windows binaries
+  - publishes artifacts to GitHub Release
 
 ## Repository layout
 
-Typical Go CLI structure:
-
 ```text
 cmd/cfgstack/main.go - entrypoint
-internal/cli         - flags and command orchestration
-internal/config      - layer discovery and config parsing
-internal/env         - env overrides
+internal/cli         - commands and flags
+internal/config      - layer discovery and parsing
+internal/env         - env override application
 internal/merge       - deep merge
-internal/output      - encoding and writing
-internal/schema      - schema validation and caching
-internal/inspect     - JSON Pointer utilities and context
-internal/prov        - provenance map and history
-internal/doctor      - diagnostics and conflict reporting
-internal/errx        - unified error formatting
+internal/output      - output read/write/encode
+internal/schema      - schema compile/validate
+internal/inspect     - JSON Pointer utilities and diff
+internal/prov        - provenance map/history
+internal/doctor      - diagnostics/reporting
+internal/errx        - structured errors
 ```
 
-## Notes and gotchas
+## Final notes
 
-* Arrays are replaced, not merged. If you need additive semantics, model it as objects or use explicit indices from env.
-* If you use `--env-case lower`, ensure your schema and file keys match the expected casing.
-* If you want deterministic env application order, `cfgstack` sorts the environment variable list before applying.
+Design priorities:
+
+- deterministic behavior;
+- explicit override semantics;
+- traceability of final values.
+
+If you need a controlled and reproducible configuration pipeline, `cfgstack` is built for exactly that.

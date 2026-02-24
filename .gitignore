@@ -3,19 +3,30 @@ config/local.*
 
 # merged outputs
 merged.*
+*.merged.json
+*.merged.yaml
+*.merged.yml
+*.merged.toml
 
 # temp
 *.tmp
+tmp/
+temp/
+*.log
 
 # build artifacts
 bin/
 dist/
+dist-smoke/
+cfgstack
+cfgstack.exe
 
 # Go
 *.test
 *.out
 cover.out
 coverage.out
+coverage/
 
 # editors
 .vscode/

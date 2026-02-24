@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"strings"
 
 	"github.com/etherinus/cfgstack/internal/config"
 	"github.com/etherinus/cfgstack/internal/inspect"
@@ -18,6 +17,23 @@ type Report struct {
 	Provenance         *prov.Map
 	MaxConflicts       int
 	FailMissingDefault bool
+}
+
+type JSONConflict struct {
+	Ptr   string        `json:"ptr"`
+	Value any           `json:"value"`
+	Chain []prov.Source `json:"chain"`
+}
+
+type JSONReport struct {
+	Scan               config.ScanResult `json:"scan"`
+	Sources            []config.Source   `json:"sources"`
+	ConflictCount      int               `json:"conflict_count"`
+	ShownConflictCount int               `json:"shown_conflict_count"`
+	Conflicts          []JSONConflict    `json:"conflicts"`
+	ConflictsTruncated bool              `json:"conflicts_truncated"`
+	MissingDefault     bool              `json:"missing_default"`
+	Ok                 bool              `json:"ok"`
 }
 
 func (r Report) Print(w io.Writer) bool {
@@ -76,10 +92,7 @@ func (r Report) Print(w io.Writer) bool {
 		}
 	}
 
-	conflicts := []prov.HistoryEntry(nil)
-	if r.Provenance != nil {
-		conflicts = r.Provenance.HistoryConflictsSorted()
-	}
+	conflicts := r.allConflicts()
 
 	fmt.Fprintln(w, "")
 	fmt.Fprintf(w, "conflicts: %d\n", len(conflicts))
@@ -88,16 +101,7 @@ func (r Report) Print(w io.Writer) bool {
 		ok = false
 	}
 
-	limit := r.MaxConflicts
-	if limit == 0 {
-		return ok
-	}
-	if limit < 0 {
-		limit = len(conflicts)
-	}
-	if limit > len(conflicts) {
-		limit = len(conflicts)
-	}
+	limit := r.limitFor(len(conflicts))
 
 	for i := 0; i < limit; i++ {
 		c := conflicts[i]
@@ -147,6 +151,53 @@ func trimString(s string, max int) string {
 	return s[:max-3] + "..."
 }
 
-func (r Report) unused() {
-	_ = strings.Builder{}
+func (r Report) JSON() JSONReport {
+	conflicts := r.allConflicts()
+	limit := r.limitFor(len(conflicts))
+	shown := conflicts[:limit]
+
+	outConflicts := make([]JSONConflict, 0, len(shown))
+	for _, c := range shown {
+		val, _ := inspect.ValueAtPointer(r.Config, c.Ptr)
+		outConflicts = append(outConflicts, JSONConflict{
+			Ptr:   c.Ptr,
+			Value: val,
+			Chain: c.Sources,
+		})
+	}
+
+	missingDefault := r.FailMissingDefault && len(r.Scan.Supported["default"]) == 0
+	ok := len(conflicts) == 0 && !missingDefault
+
+	return JSONReport{
+		Scan:               r.Scan,
+		Sources:            r.Sources,
+		ConflictCount:      len(conflicts),
+		ShownConflictCount: len(shown),
+		Conflicts:          outConflicts,
+		ConflictsTruncated: len(conflicts) > len(shown),
+		MissingDefault:     missingDefault,
+		Ok:                 ok,
+	}
+}
+
+func (r Report) allConflicts() []prov.HistoryEntry {
+	if r.Provenance == nil {
+		return nil
+	}
+	return r.Provenance.HistoryConflictsSorted()
+}
+
+func (r Report) limitFor(total int) int {
+	limit := r.MaxConflicts
+	if limit < 0 {
+		limit = total
+	}
+	if limit > total {
+		limit = total
+	}
+	if limit < 0 {
+		return 0
+	}
+	return limit
 }

@@ -29,10 +29,7 @@ func (v Validator) Validate(data any) error {
 	if err := sch.Validate(data); err != nil {
 		var ve *jsonschema.ValidationError
 		if errors.As(err, &ve) {
-			loc := ve.InstanceLocation
-			if loc == "" {
-				loc = "/"
-			}
+			loc := instanceLocationToPointer(ve.InstanceLocation)
 
 			msg := formatValidationError(ve)
 			ctx := inspect.FormatContext(data, loc)
@@ -65,12 +62,32 @@ func formatValidationError(ve *jsonschema.ValidationError) string {
 
 func addValidationLines(out *[]string, ve *jsonschema.ValidationError, depth int) {
 	indent := strings.Repeat("  ", depth)
-	loc := ve.InstanceLocation
-	if loc == "" {
-		loc = "/"
-	}
-	*out = append(*out, indent+loc+": "+ve.Message)
+	loc := instanceLocationToPointer(ve.InstanceLocation)
+	*out = append(*out, indent+loc+": "+firstLine(ve.Error()))
 	for _, c := range ve.Causes {
 		addValidationLines(out, c, depth+1)
 	}
+}
+
+func instanceLocationToPointer(loc []string) string {
+	if len(loc) == 0 {
+		return "/"
+	}
+	var b strings.Builder
+	for _, tok := range loc {
+		b.WriteByte('/')
+		b.WriteString(prov.Escape(tok))
+	}
+	return b.String()
+}
+
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "validation failed"
+	}
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
