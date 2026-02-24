@@ -18,8 +18,8 @@ temp/
 bin/
 dist/
 dist-smoke/
-cfgstack
-cfgstack.exe
+/cfgstack
+/cfgstack.exe
 
 # Go
 *.test
