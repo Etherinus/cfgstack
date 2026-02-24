@@ -42,6 +42,11 @@ jobs:
           CGO_ENABLED: 0
         run: |
           mkdir -p dist
+          cmd_pkg="$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./cmd/... | sed '/^$/d' | head -n1)"
+          if [ -z "${cmd_pkg}" ]; then
+            echo "No main package found under ./cmd"
+            exit 1
+          fi
           ext=""
           if [ "${GOOS}" = "windows" ]; then
             ext=".exe"
@@ -49,7 +54,7 @@ jobs:
           out="dist/cfgstack_${GOOS}_${GOARCH}${ext}"
           go build -trimpath \
             -ldflags "-s -w -X github.com/etherinus/cfgstack/internal/buildinfo.Version=${GITHUB_REF_NAME} -X github.com/etherinus/cfgstack/internal/buildinfo.Commit=${GITHUB_SHA} -X github.com/etherinus/cfgstack/internal/buildinfo.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o "${out}" ./cmd/cfgstack
+            -o "${out}" "${cmd_pkg}"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

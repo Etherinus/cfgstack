@@ -31,6 +31,11 @@ jobs:
       - name: Release build smoke test
         run: |
           mkdir -p dist-smoke
+          cmd_pkg="$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./cmd/... | sed '/^$/d' | head -n1)"
+          if [ -z "${cmd_pkg}" ]; then
+            echo "No main package found under ./cmd"
+            exit 1
+          fi
           for target in linux/amd64 darwin/arm64 windows/amd64; do
             goos="${target%/*}"
             goarch="${target#*/}"
@@ -42,5 +47,5 @@ jobs:
             GOOS="${goos}" GOARCH="${goarch}" CGO_ENABLED=0 \
               go build -trimpath \
               -ldflags "-X github.com/etherinus/cfgstack/internal/buildinfo.Version=ci-smoke -X github.com/etherinus/cfgstack/internal/buildinfo.Commit=ci -X github.com/etherinus/cfgstack/internal/buildinfo.Date=ci" \
-              -o "${out}" ./cmd/cfgstack
+              -o "${out}" "${cmd_pkg}"
           done
